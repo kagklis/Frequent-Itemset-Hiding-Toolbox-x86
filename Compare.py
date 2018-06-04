@@ -1,26 +1,3 @@
-'''
-The MIT License (MIT)
-
-Copyright (c) 2016 kagklis
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-'''
 #-------------------------------------------------------------------------------
 # Name:        Compare.py
 # Purpose:     Runs multiple selected algorithms
@@ -39,10 +16,10 @@ from myiolib import *
 from SetOp import *
 
 def convert2frozen_m(f):
-    result = []
+    result = set()
     for itemset in f:
-        result.append(frozenset(itemset[0]))
-    return(result)  
+        result.add(frozenset(itemset[0]))
+    return(result)
 
 def aprioriWorker(data_fname, sup, out_fname, conn):
     try:
@@ -76,6 +53,8 @@ def functionWorker(mod_name, freq_fname, sens_fname, data_fname, sup, conn):
         return
 
 def metricWorker(fname, sanitized, sens, sup, conn):
+
+    bd_rate = 0
     Apriori_results_init = readLargeData(fname)
     S = minSet(readSensitiveSet(sens))
     SS = supersets(S, Apriori_results_init.keys())
@@ -86,19 +65,17 @@ def metricWorker(fname, sanitized, sens, sup, conn):
     side_effects = len(r_fd)-len(Apriori_results)
     
     if side_effects<0:
-        conn.send((side_effects,0,))
+        conn.send((side_effects,0,999,))
         conn.close()
         return
     else:
-##        a1 = 0.
-##        a2 = 0.
-##        for itemset in convert2frozen_m(apriori(r_fd, target='m', supp = float(0.0))):
-##            a1 += 1.0
-##            for itemset2 in convert2frozen_m(apriori(Apriori_results.keys(), target='m', supp = float(0.0))):
-##                if itemset == itemset2:
-##                    a2 += 1.0
-##                    
-##        Bd_rate = abs(round(float((a1-a2)/a1),2))
+        a1 = 0.
+        a2 = 0.
+        rev_res = convert2frozen_m(apriori(list(set(Apriori_results_init) - SS), target='m', supp = float(0.0)))
+        san_res = convert2frozen_m(apriori(Apriori_results.keys(), target='m', supp = float(0.0)))
+        a1 = 1. * len(rev_res)
+        a2 = 1. * len(rev_res & san_res) 
+        bd_rate = abs(round((a1-a2)/a1,2))
         
         SumAll = 0
         AbsDif = 0.0
@@ -114,7 +91,7 @@ def metricWorker(fname, sanitized, sens, sup, conn):
         else:
             inls =  round(float(AbsDif/SumAll), 3)
 
-        conn.send((side_effects, inls,))
+        conn.send((side_effects, inls, bd_rate, ))
         conn.close()
         return
 
@@ -147,6 +124,7 @@ def Compare(Original_DB, support, Sens_f, selection, fNames):
     s_ef = [0]*len(selection)
     ch_raw_dat = [0]*len(selection)
     fil = [0]*len(selection)
+    bdr = [0]*len(selection)
     rev_t = ['']*len(selection)
     CPU_time = 0
     
@@ -187,7 +165,9 @@ def Compare(Original_DB, support, Sens_f, selection, fNames):
         parent, child = Pipe()
         p = Process(target=metricWorker, args=(out_fname, fNames[index]+"_results.txt", Sens_f, support, child,))
         p.start()
-        s_ef[index], fil[index]= parent.recv()
+        response = parent.recv()
+        print(response)
+        s_ef[index], fil[index], bdr[index] = response
         parent.close()
         p.join()
         p = None
@@ -195,7 +175,7 @@ def Compare(Original_DB, support, Sens_f, selection, fNames):
         child = None
         gc.collect()
     
-    return(s_ef, ch_raw_dat, time, rev_t, fil, CPU_time)
+    return(s_ef, ch_raw_dat, time, rev_t, fil, CPU_time, bdr)
            
 
 ###############################################
@@ -236,7 +216,7 @@ def Comp_main_false(Original_DB, Sens_f, selection, sigma, fNames, algos):
             elif type(response) == type(tuple) and len(response)==2:
                 return(response)
             
-            n,c,t,rv,fil,m_time=response
+            n,c,t,rv,fil,m_time,bd=response
             response = None
             
             for i in range(len(selection)):
@@ -286,7 +266,7 @@ def Comp_main_false(Original_DB, Sens_f, selection, sigma, fNames, algos):
                     print(algos[i],'Change in Raw Data: ',c[i],file=OUT_FILE)
                     print(algos[i],'Side Effects: ',n[i],file=OUT_FILE)
                     print(algos[i],'Frequency Information Loss: ',fil[i],file=OUT_FILE)
-                    #print(algos[i],'Rev. Pos. Border Inf. Loss: ',bdr[i],file=OUT_FILE)
+                    print(algos[i],'Rev. Pos. Border Inf. Loss: ',bd[i],file=OUT_FILE)
             print('=================================',file=OUT_FILE)
             print('\n',file=OUT_FILE)
             SUPPORT=SUPPORT+STEP
@@ -307,7 +287,7 @@ def Comp_main_true(Original_DB, support, Sens_f, selection, fNames, algos):
     change_raw = []
     time_cpu = []
     inf_loss = []
-    
+
     for i in range(len(selection)):
         side_effects.append({})
         change_raw.append({})
@@ -341,7 +321,7 @@ def Comp_main_true(Original_DB, support, Sens_f, selection, fNames, algos):
         elif type(response) == type(tuple) and len(response)==2:
             return(response)
         
-        n,c,t,rv,fil,m_time=response
+        n,c,t,rv,fil,m_time,bd=response
         response = None
 
         for i in range(len(selection)):
@@ -395,7 +375,7 @@ def Comp_main_true(Original_DB, support, Sens_f, selection, fNames, algos):
                 print(algos[i],'Change in Raw Data: ',c[i],file=OUT_FILE)
                 print(algos[i],'Side Effects: ',n[i],file=OUT_FILE)
                 print(algos[i],'Frequency Information Loss: ',fil[i],file=OUT_FILE)
-                #print(algos[i],'Rev. Pos. Border Inf. Loss: ',bdr[i],file=OUT_FILE)
+                print(algos[i],'Rev. Pos. Border Inf. Loss: ',bd[i],file=OUT_FILE)
         print('=================================',file=OUT_FILE)
         print('\n',file=OUT_FILE)
     OUT_FILE.close()

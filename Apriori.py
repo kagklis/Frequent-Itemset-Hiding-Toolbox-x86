@@ -1,27 +1,3 @@
-'''
-The MIT License (MIT)
-
-Copyright (c) 2016 kagklis
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-'''
-
 #-------------------------------------------------------------------------------
 # Name:        Apriori.py
 # Purpose:     Mining Frequent Itemsets
@@ -72,11 +48,17 @@ def convert2dic(F, N):
         freq[frozenset(itemset[0])] = float(itemset[1][0]/N)
     return freq
 
+def convert2frozen_m(f):
+    result = []
+    for itemset in f:
+        result.append(frozenset(itemset[0]))
+    return(result)
+
 def Apriori_main(data_fname, minSupport, out_fname='Apriori_results.txt'):
     lines,tid = readDataset(data_fname)
     t1=clock()
     temp_freq = apriori(tid, target='s', supp=float(minSupport*100), conf=100)
-    CPU_time=clock()-t1
+    CPU_time=clock()-t1    
     freq_items = convert2dic(temp_freq,lines)
     printResults(data_fname,minSupport,CPU_time,freq_items,out_fname)
     return(freq_items,CPU_time)

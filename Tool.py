@@ -1,27 +1,3 @@
-'''
-The MIT License (MIT)
-
-Copyright (c) 2016 kagklis
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-'''
-
 #-------------------------------------------------------------------------------
 # Name:        Tool.py
 # Purpose:     Implements GUI
@@ -226,9 +202,9 @@ def countTrues(p):
     return(counter)
 
 def convert2frozen_m(f):
-    result = []
+    result = set()
     for itemset in f:
-        result.append(frozenset(itemset[0]))
+        result.add(frozenset(itemset[0]))
     return(result)
 
 def aprioriWorker(data_fname, sup, conn, flag=True):
@@ -269,6 +245,8 @@ def functionWorker(mod_name, freq_fname, sens_fname, data_fname, sup, conn):
         return
 
 def metricWorker(fname, sanitized, sens, sup, conn):
+
+    bd_rate = 0.
     Apriori_results_init = readLargeData(fname)
     S = minSet(readSensitiveSet(sens))
     SS = supersets(S, Apriori_results_init.keys())
@@ -282,6 +260,13 @@ def metricWorker(fname, sanitized, sens, sup, conn):
         conn.close()
         return
     else:
+        a1 = 0.
+        a2 = 0.
+        rev_res = convert2frozen_m(apriori(list(set(Apriori_results_init) - SS), target='m', supp = float(0.0), conf=100))
+        san_res = convert2frozen_m(apriori(Apriori_results.keys(), target='m', supp = float(0.0), conf=100))
+        a1 = 1. * len(rev_res)
+        a2 = 1. * len(rev_res & san_res) 
+        bd_rate = abs(round((a1-a2)/a1,2))
 
         SumAll = 0
         AbsDif = 0.0
@@ -297,7 +282,7 @@ def metricWorker(fname, sanitized, sens, sup, conn):
         else:
             inls =  round(float(AbsDif/SumAll), 3)
 
-        conn.send((side_effects, inls,))
+        conn.send((side_effects, inls, bd_rate,))
         conn.close()
         return
 
@@ -431,7 +416,7 @@ def _Go():
             print(response)
             return
 
-        #print(response)
+        print(response)
         rev_t, crd, t = response
             
         p = None
@@ -444,8 +429,7 @@ def _Go():
             p = Process(target=metricWorker, args=(filename, fNames[option]+"_results.txt", f_sens_name, sup, child,))
             p.start()
             response= parent.recv()
-            #print(response)
-            se, inls = response
+            se, inls, Bd_rate = response
             parent.close()
             p.join()
             p = None
@@ -477,7 +461,7 @@ def _Go():
                     print('Changes in Raw Data: '+str(crd), file=vis)
                     print('Side Effects: '+str(se),file=vis)
                     print('Frequency Information Loss: '+str(inls),file=vis)
-                    #print('Rev. Pos. Border Inf. Loss: '+str(Bd_rate),file=vis)
+                    print('Rev. Pos. Border Inf. Loss: '+str(Bd_rate),file=vis)
 
                 display_text(fNames[option]+"_visible.txt")
              
@@ -610,7 +594,7 @@ def create_graphs_1_2_4_5(data, ax):
                     MY = k
 
             if not(line_points_x[i] ==  [] or line_points_y[i] ==  []):
-                ax.plot(line_points_x[i], line_points_y[i], marker = markers[i], color = colors[i], label = str(Algorithms[i]), lod = True, clip_on = False, markersize = def_size)
+                ax.plot(line_points_x[i], line_points_y[i], marker = markers[i], color = colors[i], label = str(Algorithms[i]), clip_on = False, markersize = def_size)
                 ax.legend(prop = {'size':9})
                 def_size -=  0.33
 
